@@ -17,14 +17,23 @@ const app = express();
 // Set up security middleware
 app.use(express.json());
 
-const allowedOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173']; 
+const allowedOrigins = [
+  'http://localhost:5173', 
+  'http://127.0.0.1:5173',
+  'https://scrble-front-end.vercel.app' // Production frontend
+]; 
+
+console.log('🔓 CORS allowed origins:', allowedOrigins);
+
 app.use(cors({
     origin: (origin, callback) => {
         if (!origin) return callback(null, true);
         if (allowedOrigins.indexOf(origin) === -1) {
             const msg = 'CORS policy does not allow access from this Origin.';
+            console.error(`❌ CORS Error: Origin '${origin}' not allowed`);
             return callback(new Error(msg), false);
         }
+        console.log(`✅ CORS: Allowing origin '${origin}'`);
         return callback(null, true);
     },
     credentials: true
@@ -49,7 +58,17 @@ app.use('/api/', limiter); // Apply to all API routes
 
 // Basic route for testing server status
 app.get('/', (req, res) => {
-  res.send('API is running...');
+  res.send('✅ API is running...');
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok',
+    message: '✅ Backend is running and healthy',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 // Define a placeholder for routes
@@ -57,4 +76,8 @@ app.get('/', (req, res) => {
 
 // Start the server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔗 API Base URL: ${process.env.NODE_ENV === 'production' ? 'https://scrble-back-end.onrender.com' : `http://localhost:${PORT}`}`);
+});
