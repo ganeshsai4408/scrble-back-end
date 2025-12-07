@@ -16,14 +16,30 @@ const app = express();
 
 // Set up security middleware
 app.use(express.json());
-app.use(cors());
+
+const allowedOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173']; 
+app.use(cors({
+    origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            const msg = 'CORS policy does not allow access from this Origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    },
+    credentials: true
+}));
 app.use(helmet());
-app.use(errorHandler);
+
+// Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/products', require('./routes/products'));
 app.use('/api/cart', require('./routes/cart'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/admin', require('./routes/admin'));
+
+// Error handler middleware (must be after routes)
+app.use(errorHandler);
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // Max 100 requests per IP per window

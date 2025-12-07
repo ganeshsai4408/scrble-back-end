@@ -182,8 +182,18 @@ exports.googleLogin = async (req, res, next) => {
 // @access    Public
 exports.forgotPassword = async (req, res, next) => {
   const { email } = req.body;
+  
+  // Check required environment variables
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Email service not configured properly' 
+    });
+  }
+  
+  let user;
   try {
-    const user = await User.findOne({ email });
+    user = await User.findOne({ email });
 
     if (!user) {
       return res.status(404).json({ success: false, msg: 'There is no user with that email' });
@@ -222,10 +232,65 @@ exports.forgotPassword = async (req, res, next) => {
     res.status(200).json({ success: true, data: 'Password reset token sent to email' });
 
   } catch (err) {
+    console.error('Forgot password error:', err);
+    if (user) {
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+      await user.save({ validateBeforeSave: false });
+    }
+    res.status(500).json({ success: false, error: 'Email could not be sent', details: err.message });
+  }
+};
+
+// @desc      Verify reset password token
+// @route     POST /api/auth/verify-reset-token
+// @access    Public
+exports.verifyResetToken = async (req, res, next) => {
+  const { email, token } = req.body;
+  
+  try {
+    const user = await User.findOne({
+      email,
+      resetPasswordToken: token,
+      resetPasswordExpire: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, msg: 'Invalid or expired token' });
+    }
+
+    res.status(200).json({ success: true, msg: 'Token is valid' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+};
+
+// @desc      Reset password
+// @route     PUT /api/auth/reset-password
+// @access    Public
+exports.resetPassword = async (req, res, next) => {
+  const { email, token, password } = req.body;
+  
+  try {
+    const user = await User.findOne({
+      email,
+      resetPasswordToken: token,
+      resetPasswordExpire: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, msg: 'Invalid or expired token' });
+    }
+
+    // Set new password
+    user.password = password;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
-    await user.save({ validateBeforeSave: false });
-    res.status(500).json({ success: false, error: 'Email could not be sent' });
+    await user.save();
+
+    res.status(200).json({ success: true, msg: 'Password updated successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Server error' });
   }
 };
 
@@ -233,10 +298,23 @@ exports.forgotPassword = async (req, res, next) => {
 const sendTokenResponse = (user, statusCode, res) => {
   const token = user.getSignedJwtToken();
 
-  res.status(statusCode).json({
+  const response = {
     success: true,
     token,
     role: user.role,
     isVerified: user.isVerified,
-  });
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    }
+  };
+
+  // Add redirect URL for admin users
+  if (user.role === 'admin') {
+    response.redirectTo = '/admin';
+  }
+
+  res.status(statusCode).json(response);
 };
