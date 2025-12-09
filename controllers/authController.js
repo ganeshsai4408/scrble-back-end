@@ -16,6 +16,16 @@ const sendVerificationToken = async (user, res, message) => {
 
   await user.save({ validateBeforeSave: false });
 
+  // Skip email sending if email env vars not configured (development mode)
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.log(`📧 Email verification token for ${user.email}: ${emailVerificationToken}`);
+    return res.status(200).json({ 
+      success: true, 
+      data: message,
+      token: emailVerificationToken // Include token in response for development
+    });
+  }
+
   const transporter = nodemailer.createTransport({
     service: 'gmail', // Or use your SMTP provider
     auth: {
@@ -70,11 +80,26 @@ exports.register = async (req, res, next) => {
       email,
       password,
       phoneNumber,
+      isVerified: true, // Skip email verification for registration
     });
 
-    sendVerificationToken(user, res, 'User registered successfully. A verification token has been sent to your email.');
+    // Send success response without email verification
+    res.status(201).json({ 
+      success: true, 
+      message: 'User registered successfully. You can now log in.',
+      data: {
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          phoneNumber: user.phoneNumber,
+          role: user.role
+        }
+      }
+    });
 
   } catch (err) {
+    console.error('Registration error:', err);
     res.status(500).json({ success: false, error: 'Server error' });
   }
 };
@@ -133,13 +158,7 @@ exports.login = async (req, res, next) => {
       return res.status(401).json({ success: false, msg: 'Invalid credentials' });
     }
 
-    // Check if email is verified
-    if (!user.isVerified) {
-      // Re-send verification token if not verified
-      sendVerificationToken(user, res, 'Your email is not verified. A new verification token has been sent.');
-      return;
-    }
-
+    // Skip email verification check - allow login immediately after registration
     sendTokenResponse(user, 200, res);
   } catch (err) {
     res.status(500).json({ success: false, error: 'Server error' });
