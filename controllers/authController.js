@@ -56,7 +56,7 @@ exports.register = async (req, res, next) => {
     return res.status(400).json({ errors: errors.array() });
   }
   
-  const { name, email, password } = req.body;
+  const { name, email, password, phoneNumber } = req.body;
 
   try {
     let user = await User.findOne({ email });
@@ -69,6 +69,7 @@ exports.register = async (req, res, next) => {
       name,
       email,
       password,
+      phoneNumber,
     });
 
     sendVerificationToken(user, res, 'User registered successfully. A verification token has been sent to your email.');
